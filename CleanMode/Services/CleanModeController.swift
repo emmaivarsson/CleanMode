@@ -12,11 +12,13 @@ final class CleanModeController: ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var optionHoldProgress: Double = 0
     @Published private(set) var hasSeenFirstRunTip = UserDefaults.standard.bool(forKey: "hasSeenFirstRunTip")
+    @Published private(set) var lastErrorMessage: String?
 
     private let inputLock = InputLockService()
     private let overlay = OverlayWindowController()
     private var autoUnlockTimer: Timer?
     private var sleepObservers: [NSObjectProtocol] = []
+    private var appObservers: [NSObjectProtocol] = []
 
     var isLocked: Bool { state == .locked }
 
@@ -63,6 +65,7 @@ final class CleanModeController: ObservableObject {
 
         refreshPermissionState()
         installSleepObservers()
+        installAppObservers()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(applicationWillTerminate),
@@ -73,10 +76,12 @@ final class CleanModeController: ObservableObject {
 
     deinit {
         sleepObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        appObservers.forEach { NotificationCenter.default.removeObserver($0) }
         NotificationCenter.default.removeObserver(self)
     }
 
     func refreshPermissionState() {
+        lastErrorMessage = nil
         if AccessibilityPermission.isTrusted {
             if state == .needsPermission {
                 state = .idle
@@ -87,20 +92,23 @@ final class CleanModeController: ObservableObject {
     }
 
     func startCleanMode() {
+        lastErrorMessage = nil
         refreshPermissionState()
-        guard AccessibilityPermission.isTrusted else {
-            state = .needsPermission
-            AccessibilityPermission.requestTrust()
-            return
-        }
 
+        // Don't hard-block only on AXIsProcessTrusted — try the tap too.
+        // Settings can show ON for a stale binary while this process is still untrusted.
         guard !isLocked else { return }
 
         do {
             try inputLock.start()
+        } catch InputLockError.accessibilityDenied, InputLockError.tapCreationFailed {
+            state = .needsPermission
+            lastErrorMessage = "macOS still blocks input locking. Turn CleanMode ON in Accessibility, then use Quit & Relaunch."
+            AccessibilityPermission.requestTrust()
+            return
         } catch {
             state = .needsPermission
-            AccessibilityPermission.openSystemSettings()
+            lastErrorMessage = "Could not start Clean Mode."
             return
         }
 
@@ -121,6 +129,10 @@ final class CleanModeController: ObservableObject {
 
     func openAccessibilitySettings() {
         AccessibilityPermission.openSystemSettings()
+    }
+
+    func relaunchAfterGrantingAccess() {
+        AccessibilityPermission.relaunchApp()
     }
 
     func markFirstRunTipSeen() {
@@ -144,7 +156,7 @@ final class CleanModeController: ObservableObject {
         overlay.hide()
         optionHoldProgress = 0
         state = AccessibilityPermission.isTrusted ? .idle : .needsPermission
-        _ = reason // retained for clarity / future logging
+        _ = reason
     }
 
     private func scheduleAutoUnlock() {
@@ -175,6 +187,20 @@ final class CleanModeController: ObservableObject {
             }
             sleepObservers.append(token)
         }
+    }
+
+    private func installAppObservers() {
+        let center = NotificationCenter.default
+        let token = center.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshPermissionState()
+            }
+        }
+        appObservers.append(token)
     }
 
     @objc private func applicationWillTerminate() {

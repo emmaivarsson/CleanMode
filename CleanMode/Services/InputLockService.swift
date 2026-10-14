@@ -20,11 +20,10 @@ final class InputLockService {
     private(set) var isActive = false
 
     func start() throws {
-        guard AccessibilityPermission.isTrusted else {
-            throw InputLockError.accessibilityDenied
-        }
         stop()
 
+        // Prefer the real capability check (tap create). AXIsProcessTrusted can lag
+        // behind System Settings after a rebuild or signing change.
         let mask = Self.eventMask
         let callback: CGEventTapCallBack = { proxy, type, event, refcon in
             guard let refcon else { return Unmanaged.passUnretained(event) }
@@ -40,6 +39,9 @@ final class InputLockService {
             callback: callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
+            if !AccessibilityPermission.isTrusted {
+                throw InputLockError.accessibilityDenied
+            }
             throw InputLockError.tapCreationFailed
         }
 
@@ -98,13 +100,6 @@ final class InputLockService {
 
         if type == .flagsChanged {
             updateOptionHold(from: event)
-            // Swallow flags so Option alone cannot affect other apps mid-clean.
-            return nil
-        }
-
-        // Swallow all other keyboard and pointer events.
-        if type == .keyDown || type == .keyUp {
-            // If Option is no longer held (e.g. weird edge), keep lock.
             return nil
         }
 
@@ -114,8 +109,6 @@ final class InputLockService {
     private func updateOptionHold(from event: CGEvent) {
         let flags = event.flags
         let optionDown = flags.contains(.maskAlternate)
-        // Require Option without Command/Control/Shift so wiping other modifiers
-        // cannot accidentally count toward unlock.
         let onlyOption =
             optionDown
             && !flags.contains(.maskCommand)

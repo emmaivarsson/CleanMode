@@ -15,14 +15,27 @@ enum AccessibilityPermission {
 
     static func openSystemSettings() {
         let urls = [
-            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"),
+            // macOS Sequoia / newer Settings deep links
             URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility"),
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"),
             URL(string: "x-apple.systempreferences:com.apple.preference.security")
         ]
         for url in urls.compactMap({ $0 }) {
             if NSWorkspace.shared.open(url) {
                 return
             }
+        }
+    }
+
+    /// macOS often keeps the old trust decision until the process fully restarts.
+    static func relaunchApp() {
+        let url = Bundle.main.bundleURL
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = ["-n", "-a", url.path]
+        try? task.run()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NSApp.terminate(nil)
         }
     }
 }

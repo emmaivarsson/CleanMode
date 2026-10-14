@@ -26,12 +26,17 @@ open build/Build/Products/Debug/CleanMode.app
 
 ## Grant Accessibility
 
-1. Start Clean Mode once (menu bar droplet → **Start Clean Mode**).
-2. macOS may show a trust prompt — allow it, or open **System Settings → Privacy & Security → Accessibility**.
-3. Enable the checkbox for **Clean Mode**.
-4. If the menu shows a warning triangle, choose **I’ve Granted Access** after enabling.
+macOS often shows CleanMode as allowed even when the *running* build is still blocked (common after rebuilds). Do this exact sequence:
 
-Unsigned/ad-hoc builds may need **right-click → Open** the first time (Gatekeeper).
+1. Prefer the Release app:  
+   `/Users/emmiva/Code/personal/CleanMode/build/Build/Products/Release/CleanMode.app`  
+   or a copy in **Applications**.
+2. Open **System Settings → Privacy & Security → Accessibility**.
+3. Find **CleanMode** and turn it **ON** (if it was already on, toggle OFF then ON).
+4. Click the menu bar icon → **Quit & Relaunch** (or Quit, then open the app again).
+5. Click **Start Clean Mode**.
+
+If it still prompts: delete any duplicate CleanMode rows in Accessibility, re-add by launching Start once more, then Quit & Relaunch.
 
 ## How to use
 

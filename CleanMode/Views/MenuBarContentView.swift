@@ -23,11 +23,16 @@ struct MenuBarContentView: View {
                 if controller.state == .needsPermission {
                     Divider()
                     Text("Accessibility required")
+                    if let message = controller.lastErrorMessage {
+                        Text(message)
+                    } else {
+                        Text("If the toggle is already ON: Quit & Relaunch")
+                    }
                     Button("Open Accessibility Settings…") {
                         controller.openAccessibilitySettings()
                     }
-                    Button("I’ve Granted Access") {
-                        controller.refreshPermissionState()
+                    Button("Quit & Relaunch") {
+                        controller.relaunchAfterGrantingAccess()
                     }
                 } else if !controller.hasSeenFirstRunTip {
                     Divider()
